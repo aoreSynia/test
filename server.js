@@ -9,11 +9,31 @@ const PORT = process.env.PORT || 3000;
 
 const mongoUrl = `mongodb://${process.env.MONGO_USER}:${process.env.MONGO_PASSWORD}@${process.env.MONGO_HOST}:${process.env.MONGO_PORT}/${process.env.MONGO_DB}?authSource=${process.env.MONGO_AUTH_SOURCE}&directConnection=true`;
 
+// Optimize MongoDB options for serverless
 const mongoOptions = {
-  serverSelectionTimeoutMS: 5000,
+  serverSelectionTimeoutMS: 3000, // Reduced from 5000 to 3000
+  maxPoolSize: 1, // Important for serverless
+  minPoolSize: 0, // Important for serverless
+  socketTimeoutMS: 3000, // Add socket timeout
+  connectTimeoutMS: 3000, // Add connection timeout
   useNewUrlParser: true,
   useUnifiedTopology: true
 };
+
+// Reuse MongoDB connection
+let cachedClient = null;
+let cachedDb = null;
+
+async function connectToDatabase() {
+  if (cachedClient && cachedDb) {
+    return { client: cachedClient, db: cachedDb };
+  }
+
+  cachedClient = await MongoClient.connect(mongoUrl, mongoOptions);
+  cachedDb = cachedClient.db(process.env.MONGO_DB);
+
+  return { client: cachedClient, db: cachedDb };
+}
 
 // Health check endpoint
 app.get("/", (req, res) => {
@@ -21,10 +41,8 @@ app.get("/", (req, res) => {
 });
 
 app.get("/data/:collection", async (req, res) => {
-  let client;
   try {
-    client = await MongoClient.connect(mongoUrl, mongoOptions);
-    const db = client.db(process.env.MONGO_DB);
+    const { db } = await connectToDatabase();
     const collection = req.params.collection;
 
     const collections = await db.listCollections().toArray();
@@ -46,10 +64,6 @@ app.get("/data/:collection", async (req, res) => {
       error: 'Database query failed',
       details: err.message 
     });
-  } finally {
-    if (client) {
-      await client.close();
-    }
   }
 });
 
