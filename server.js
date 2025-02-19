@@ -11,7 +11,14 @@ const mongoUrl = `mongodb://${process.env.MONGO_USER}:${process.env.MONGO_PASSWO
 
 const mongoOptions = {
   serverSelectionTimeoutMS: 5000,
+  useNewUrlParser: true,
+  useUnifiedTopology: true
 };
+
+// Health check endpoint
+app.get("/", (req, res) => {
+  res.json({ status: "API is running" });
+});
 
 app.get("/data/:collection", async (req, res) => {
   let client;
@@ -46,4 +53,9 @@ app.get("/data/:collection", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {});
+// For Vercel, we export the app instead of calling listen
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {});
+}
+
+module.exports = app;
