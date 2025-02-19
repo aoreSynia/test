@@ -76,15 +76,16 @@ app.get("/health", async (req, res) => {
   }
 });
 
-// Get all collections using getCollectionNames
+// Get all collections using MongoDB command
 app.get("/collections", async (req, res) => {
   try {
     const { db } = await connectToDatabase();
     // Sử dụng command để lấy danh sách collections
-    const collections = await db.command({ listCollections: 1 });
-    const collectionNames = collections.cursor.firstBatch.map(col => col.name);
+    const result = await db.command({ listCollections: 1, nameOnly: true });
+    const collectionNames = result.cursor.firstBatch.map(col => col.name);
     res.json(collectionNames);
   } catch (err) {
+    console.error('Error getting collections:', err);
     res.status(500).json({
       error: 'Failed to get collections',
       details: err.message
@@ -98,8 +99,8 @@ app.get("/data/:collection", async (req, res) => {
     const collection = req.params.collection;
 
     // Kiểm tra collection tồn tại bằng command
-    const collections = await db.command({ listCollections: 1 });
-    const collectionExists = collections.cursor.firstBatch.some(col => col.name === collection);
+    const result = await db.command({ listCollections: 1, nameOnly: true });
+    const collectionExists = result.cursor.firstBatch.some(col => col.name === collection);
     
     if (!collectionExists) {
       return res.status(404).json({ error: `Collection "${collection}" không tồn tại` });
@@ -113,6 +114,7 @@ app.get("/data/:collection", async (req, res) => {
 
     res.json(data);
   } catch (err) {
+    console.error('Error getting collection data:', err);
     res.status(500).json({ 
       error: 'Database query failed',
       details: err.message 
