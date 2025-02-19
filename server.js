@@ -40,6 +40,21 @@ app.get("/", (req, res) => {
   res.json({ status: "API is running" });
 });
 
+// Get all collections
+app.get("/collections", async (req, res) => {
+  try {
+    const { db } = await connectToDatabase();
+    const collections = await db.listCollections().toArray();
+    const collectionNames = collections.map(col => col.name);
+    res.json(collectionNames);
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to get collections',
+      details: err.message
+    });
+  }
+});
+
 app.get("/data/:collection", async (req, res) => {
   try {
     const { db } = await connectToDatabase();
