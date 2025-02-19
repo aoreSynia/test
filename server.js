@@ -62,7 +62,7 @@ app.get("/", (req, res) => {
 app.get("/health", async (req, res) => {
   try {
     const { client, db } = await connectToDatabase();
-    const collections = await db.listCollections().toArray();
+    const collections = await db.getCollectionNames();
     res.json({ 
       status: "healthy",
       database: "connected",
@@ -76,12 +76,13 @@ app.get("/health", async (req, res) => {
   }
 });
 
-// Get all collections
+// Get all collections using getCollectionNames
 app.get("/collections", async (req, res) => {
   try {
     const { db } = await connectToDatabase();
-    const collections = await db.listCollections().toArray();
-    const collectionNames = collections.map(col => col.name);
+    // Sử dụng command để lấy danh sách collections
+    const collections = await db.command({ listCollections: 1 });
+    const collectionNames = collections.cursor.firstBatch.map(col => col.name);
     res.json(collectionNames);
   } catch (err) {
     res.status(500).json({
@@ -96,8 +97,9 @@ app.get("/data/:collection", async (req, res) => {
     const { db } = await connectToDatabase();
     const collection = req.params.collection;
 
-    const collections = await db.listCollections().toArray();
-    const collectionExists = collections.some(col => col.name === collection);
+    // Kiểm tra collection tồn tại bằng command
+    const collections = await db.command({ listCollections: 1 });
+    const collectionExists = collections.cursor.firstBatch.some(col => col.name === collection);
     
     if (!collectionExists) {
       return res.status(404).json({ error: `Collection "${collection}" không tồn tại` });
