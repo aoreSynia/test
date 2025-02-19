@@ -19,11 +19,11 @@ const mongoUrl = `mongodb://${process.env.MONGO_USER}:${process.env.MONGO_PASSWO
 
 // Optimize MongoDB options for serverless
 const mongoOptions = {
-  serverSelectionTimeoutMS: 3000,
+  serverSelectionTimeoutMS: 5000,
   maxPoolSize: 1,
   minPoolSize: 0,
-  socketTimeoutMS: 3000,
-  connectTimeoutMS: 3000,
+  socketTimeoutMS: 5000,
+  connectTimeoutMS: 5000,
   useNewUrlParser: true,
   useUnifiedTopology: true
 };
@@ -80,7 +80,6 @@ app.get("/health", async (req, res) => {
 app.get("/collections", async (req, res) => {
   try {
     const { db } = await connectToDatabase();
-    // Sử dụng command để lấy danh sách collections
     const result = await db.command({ listCollections: 1, nameOnly: true });
     const collectionNames = result.cursor.firstBatch.map(col => col.name);
     res.json(collectionNames);
@@ -97,22 +96,45 @@ app.get("/data/:collection", async (req, res) => {
   try {
     const { db } = await connectToDatabase();
     const collection = req.params.collection;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
 
-    // Kiểm tra collection tồn tại bằng command
-    const result = await db.command({ listCollections: 1, nameOnly: true });
-    const collectionExists = result.cursor.firstBatch.some(col => col.name === collection);
+    // Kiểm tra collection tồn tại
+    const result = await db.command({ listCollections: 1, nameOnly: true, filter: { name: collection } });
+    const collectionExists = result.cursor.firstBatch.length > 0;
     
     if (!collectionExists) {
       return res.status(404).json({ error: `Collection "${collection}" không tồn tại` });
     }
 
-    const data = await db.collection(collection).find({}).limit(10).toArray();
+    // Đếm tổng số documents
+    const total = await db.collection(collection).countDocuments();
+
+    // Lấy dữ liệu với phân trang
+    const data = await db.collection(collection)
+      .find({})
+      .sort({ _id: -1 }) // Sắp xếp theo _id mới nhất
+      .skip(skip)
+      .limit(limit)
+      .toArray();
     
     if (data.length === 0) {
-      return res.json({ message: 'Không có dữ liệu trong collection này' });
+      return res.json({ 
+        message: 'Không có dữ liệu trong collection này',
+        total: 0,
+        page: page,
+        limit: limit,
+        data: []
+      });
     }
 
-    res.json(data);
+    res.json({
+      total: total,
+      page: page,
+      limit: limit,
+      data: data
+    });
   } catch (err) {
     console.error('Error getting collection data:', err);
     res.status(500).json({ 
